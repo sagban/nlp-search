@@ -48,14 +48,15 @@ const App = () => {
 
     const getKeyNotes = () => {
         let matches = [];
-        axios.post('https://hackathon.autokaas.com/get_nerTags', {"text": transcript}, {
+        axios.post('https://hackathon.autokaas.com/tagExtractor', {"text": transcript}, {
             headers: {
                 "accept": "application/json",
                 "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
                 "Content-Type": "application/json"
             }
         }).then(res => {
-            console.log(res.data)
+            let tagArray = res.data.response[0].tags;
+            setKeyNotes(tagArray);
         })
             .catch(err => console.log(err));
     }
@@ -145,11 +146,14 @@ const App = () => {
                                onChange={(e) => setPhrase(e.target.value)}/>
                     </label>
                     <button type="submit" onClick={searchPhraseHandler}>Search</button>
+                    <br/>
                     {matchedCaptions.map(c => <button className="btn btn-success" onClick={() => setStartTime(c.start)}
                                                       type="submit">{c.matchedPhrase} - {c.start}</button>)}
                     <div>
                         {transcript.length > 0 ?
-                            <button type="submit" onClick={getKeyNotes}>Get Keynotes</button> : null}
+                            <button type="submit" onClick={getKeyNotes}>Get Keypoints</button> : null}
+                            <br/>
+                        {keyNotes.map(keyNote => <span className="badge bg-warning text-dark">{keyNote}</span>)}
                     </div>
                     <button type="submit" onClick={getSentimentAnalysis}>Analyse Sentiment</button>
                 </div>
