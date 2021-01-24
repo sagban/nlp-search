@@ -130,3 +130,7 @@ local.settings.json
 node_modules
 
 .python_packages
+
+.idea/*
+.idea
+.idea/*/*
