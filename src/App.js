@@ -2,9 +2,9 @@ import './App.css';
 import React from "react";
 import YoutubeIFrame from "./components/YoutubeIFrame";
 import axios from "axios";
+import Chart from 'chart.js';
 
 const _ = require('lodash');
-const commentScrapper = require('youtube-comment-api');
 const App = () => {
     const submitUrlHandler = () => {
         const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -61,12 +61,57 @@ const App = () => {
     }
 
     const getSentimentAnalysis = () => {
-        commentScrapper(videoId).then(commentPage => {
-            console.log(commentPage.comments)
-            return commentScrapper(videoId, commentPage.nextPageToken)
-        }).then(commentPage => {
-            console.log(commentPage.comments)
-        })
+        let sentimentsArray = [];
+        axios.get(`https://youtube.googleapis.com/youtube/v3/commentThreads?part=snippet&maxResults=25&order=relevance&videoId=${videoId}&key=AIzaSyApX3bSpv8b3y1PEiA29VYI5jh1ZEyd7EQ`)
+            .then(res => {
+                let comments = [];
+                let commentObjs = res.data.items;
+                commentObjs.forEach(comObj => {
+                    comments.push(comObj.snippet.topLevelComment.snippet.textDisplay)
+                });
+                axios.post("https://hackathon.autokaas.com/get_sentiment", {"texts": comments}, {
+                    headers: {
+                        "accept": "application/json",
+                        "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
+                        "Content-Type": "application/json",
+                    }
+                }).then(r => {
+                    sentimentsArray = r.data.results;
+                    let chartData = [_.sumBy(sentimentsArray, (o) => o.scores['1 star']),
+                        _.sumBy(sentimentsArray, (o) => o.scores['2 star']),
+                        _.sumBy(sentimentsArray, (o) => o.scores['3 star']),
+                        _.sumBy(sentimentsArray, (o) => o.scores['4 star']),
+                        _.sumBy(sentimentsArray, (o) => o.scores['5 star'])]
+                    console.log(chartData);
+                    console.log("henlo");
+                    const ctx = document.getElementById("myChart");
+                    new Chart(ctx, {
+                        type: "pie",
+                        data: {
+                            labels: ["Dont even think about it", "Not Good", "Okaish", "Good", "Awesome"],
+                            datasets: [
+                                {
+                                    label: "# of Votes",
+                                    data: chartData,
+                                    backgroundColor: [
+                                        "Black",
+                                        "Gray",
+                                        "Yellow",
+                                        "Pink",
+                                        "Red"
+                                    ],
+                                    borderColor: ["Dont even think about it", "Not Good", "Okaish", "Good", "Awesome"],
+                                    borderWidth: 1
+                                }
+                            ]
+                        }
+                    });
+                })
+                    .catch(er => console.error(er));
+            })
+            .catch(err => console.error(err));
+        console.log(sentimentsArray);
+
     }
 
     const [matchedCaptions, setMatchedCaptions] = React.useState([]);
