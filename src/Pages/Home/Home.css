@@ -1,6 +1,27 @@
 #home{
-	background: url("https://images.pexels.com/photos/376533/pexels-photo-376533.jpeg") no-repeat center;
+	background: url("https://images.pexels.com/photos/158826/structure-light-led-movement-158826.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1285&w=1920");
 	background-size: cover;
+	background-position: center;
+	transition: all 7000ms ease-out;
+	animation: zoom;
+	animation-duration: 50000ms;
+	animation-iteration-count: infinite;
+}
+#home:hover {
+    background-size: 150%;
+}
+@keyframes zoom {
+
+	0%{
+		background-position: 0%;
+	}
+	50%{
+		background-position: 50%;
+	}
+	100%{
+		background-position: 0%;
+	}
+
 }
 .home{
 	padding: 120px 0;
