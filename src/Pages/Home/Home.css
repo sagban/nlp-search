@@ -1,0 +1,30 @@
+#home{
+	background: url("https://images.pexels.com/photos/376533/pexels-photo-376533.jpeg") no-repeat center;
+	background-size: cover;
+}
+.home{
+	padding: 120px 0;
+}
+
+.home h1{
+	font-size: 80px;
+	font-weight: bold;
+	margin-bottom: 30px;
+}
+.button{
+	margin-top: 30px;
+	display: block;
+}
+.transcript{
+	padding: 80px 0;
+	min-height: 100vh;
+}
+.dummy{
+	width: 100%;
+	height: 315px;
+	background: url("https://images.pexels.com/photos/1542252/pexels-photo-1542252.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940") no-repeat center;
+	background-size: cover !important;
+}
+.transcript .inner{
+	margin-top: 10%;
+}
