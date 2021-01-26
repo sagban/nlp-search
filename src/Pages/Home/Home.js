@@ -103,17 +103,17 @@ const Home = () => {
                     new Chart(ctx, {
                         type: "pie",
                         data: {
-                            labels: ["Dont even think about it", "Not Good", "Okaish", "Good", "Awesome"],
+                            labels: ["Don't even think about it", "Not Good", "Okaish", "Good", "Awesome"],
                             datasets: [
                                 {
                                     label: "# of Votes",
                                     data: chartData,
                                     backgroundColor: [
-                                        "Black",
-                                        "Gray",
-                                        "Yellow",
-                                        "Pink",
-                                        "Red"
+                                        "#FCEEF3",
+                                        "#F9D9E5",
+                                        "#FA9CBE",
+                                        "#F9679C",
+                                        "#ff0560"
                                     ],
                                     borderColor: ["Dont even think about it", "Not Good", "Okaish", "Good", "Awesome"],
                                     borderWidth: 1
