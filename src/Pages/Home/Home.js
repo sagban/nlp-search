@@ -3,6 +3,7 @@ import './Home.css'
 import axios from "axios/index";
 import YoutubeIFrame from "../../Components/YoutubeIFrame";
 import Chart from "chart.js";
+import LanguageSelector from "../../Components/LanguageSelector";
 
 const _ = require('lodash');
 
@@ -18,6 +19,7 @@ const Home = () => {
     const [keyNotes, setKeyNotes] = React.useState([]);
     const [summary, setSummary] = React.useState("");
     const [matchedCaptionFound, setMatchedCaptionFound] = React.useState(true);
+    const [langValue, setLangValue] = React.useState(-1);
 
     const getTranscriptHandler = () => {
         const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -53,28 +55,41 @@ const Home = () => {
             .catch(err => console.log(err));
     };
     const searchPhraseHandler = () => {
-        setMatchedCaptionFound(true);
-        let matches = [];
-        axios.post('https://hackathon.autokaas.com/get_similarWords', {"words": [phrase]}, {
-            headers: {
-                "accept": "application/json",
-                "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
-                "Content-Type": "application/json"
-            }
-        }).then(res => {
-            let arr = [...res.data.similar_words, phrase];
-            captions.forEach(caption => {
-                for (let i = 0; i < arr.length; i++) {
-                    if (_.includes(caption.text, arr[i].replace("_", " "))) {
-                        matches.push({...caption, matchedPhrase: arr[i]});
-                        break;
-                    }
+        let englishLangPhrase = phrase;
+        if (langValue !== -1) {
+            axios.post('https://hackathon.autokaas.com/translate_to_en', {texts: [phrase]}, {
+                headers: {
+                    "accept": "application/json",
+                    "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
+                    "Content-Type": "application/json"
                 }
-            });
-            setMatchedCaptions(matches);
-            setMatchedCaptionFound(matches.length > 0);
-        })
-            .catch(err => console.log(err));
+            }).then(res => {
+                englishLangPhrase = res.data.results[0];
+
+                setMatchedCaptionFound(true);
+                let matches = [];
+                axios.post('https://hackathon.autokaas.com/get_similarWords', {"words": [englishLangPhrase]}, {
+                    headers: {
+                        "accept": "application/json",
+                        "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
+                        "Content-Type": "application/json"
+                    }
+                }).then(res => {
+                    let arr = [...res.data.similar_words, phrase];
+                    captions.forEach(caption => {
+                        for (let i = 0; i < arr.length; i++) {
+                            if (_.includes(caption.text, arr[i].replace("_", " "))) {
+                                matches.push({...caption, matchedPhrase: arr[i]});
+                                break;
+                            }
+                        }
+                    });
+                    setMatchedCaptions(matches);
+                    setMatchedCaptionFound(matches.length > 0);
+                })
+                    .catch(err => console.log(err));
+            }).catch(err => console.error(err));
+        }
     };
 
     const getSentimentAnalysis = () => {
@@ -99,8 +114,6 @@ const Home = () => {
                         _.sumBy(sentimentsArray, (o) => o.scores['3 star']),
                         _.sumBy(sentimentsArray, (o) => o.scores['4 star']),
                         _.sumBy(sentimentsArray, (o) => o.scores['5 star'])]
-                    console.log(chartData);
-                    console.log("henlo");
                     const ctx = document.getElementById("sa-chart");
                     new Chart(ctx, {
                         type: "pie",
@@ -199,13 +212,18 @@ const Home = () => {
                         {keyNotes.map(keyNote => <span className="badge bg-warning text-dark">{keyNote}</span>)}
                     </div>
                     <div>
-                        <label itemID="phrase">Search Phrase *</label>
-                        <input className="input" type="text" name="Pharse" id="phrase" value={phrase}
-                               placeholder="Enter Phrase"
-                               onChange={(e) => setPhrase(e.target.value)}/>
+                        <div>
+                            <label itemID="phrase">Search Phrase *
+                                <input className="input" type="text" name="Phrase" id="phrase" value={phrase}
+                                       placeholder="Enter Phrase"
+                                       onChange={(e) => setPhrase(e.target.value)}/>
+                                <LanguageSelector langValue={langValue} setLangValue={setLangValue}/>
 
-                        <button className="button button-v2" type="submit" onClick={searchPhraseHandler}>Search</button>
-                        <br/>
+                                <button className="button button-v2" type="submit"
+                                        onClick={searchPhraseHandler}>Search
+                                </button>
+                            </label>
+                        </div>
                         {matchedCaptions.map(c => <button className="button button-v2"
                                                           onClick={() => setStartTime(c.start)}
                                                           type="submit">{c.matchedPhrase} - {c.start}</button>)}
