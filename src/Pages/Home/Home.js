@@ -28,9 +28,8 @@ const Home = () => {
                 .then(res => {
                     let tempTranscript = " ";
                     res.data.forEach(caption => {
-                        console.log(tempTranscript + "henlo")
                         tempTranscript += " " + caption.text;
-                    })
+                    });
                     setTranscript(tempTranscript);
                     setCaptions(res.data);
                 })
@@ -183,15 +182,15 @@ const Home = () => {
                     </div>
                 </div>
             </div>
-            <div>
-                {transcript.length > 0 ?
-                    <button className="button button-v2" type="submit" onClick={getSummary}>Get
-                        Summary</button> : null}
-                <br/>
-                {summary}
-            </div>
-            {videoId.length > 0 ?
+            {videoId.length > 0 && transcript.length > 0 ?
                 <div>
+                    <div>
+                        {transcript.length > 0 ?
+                            <button className="button button-v2" type="submit" onClick={getSummary}>Get
+                                Summary</button> : null}
+                        <br/>
+                        {summary}
+                    </div>
                     <div>
                         {transcript.length > 0 ?
                             <button className="button button-v2" type="submit" onClick={getKeyNotes}>Get
@@ -208,8 +207,8 @@ const Home = () => {
                         <button className="button button-v2" type="submit" onClick={searchPhraseHandler}>Search</button>
                         <br/>
                         {matchedCaptions.map(c => <button className="button button-v2"
-                            onClick={() => setStartTime(c.start)}
-                            type="submit">{c.matchedPhrase} - {c.start}</button>)}
+                                                          onClick={() => setStartTime(c.start)}
+                                                          type="submit">{c.matchedPhrase} - {c.start}</button>)}
                         {!matchedCaptionFound ? "Try with a different phrase" : null}
                     </div>
                     <div>
@@ -220,8 +219,6 @@ const Home = () => {
                     </div>
                 </div>
                 : ""}
-
-
         </div>
 
     </div>)
