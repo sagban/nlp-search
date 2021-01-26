@@ -16,6 +16,8 @@ const Home = () => {
     const [transcript, setTranscript] = React.useState("");
     const [startTime, setStartTime] = React.useState(0);
     const [keyNotes, setKeyNotes] = React.useState([]);
+    const [summary, setSummary] = React.useState("");
+    const [matchedCaptionFound, setMatchedCaptionFound] = React.useState(true);
 
     const getTranscriptHandler = () => {
         const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -24,6 +26,12 @@ const Home = () => {
             setVideoId(match[2]);
             axios.get(`https://get-transcripts.azurewebsites.net/api/hack?code=Bz7Fagkn0m3k7br2RRIeg7kDda3UVRzWnJJixs13sXYzuoZTjrd2Uw==&videoId=${match[2]}`)
                 .then(res => {
+                    let tempTranscript = " ";
+                    res.data.forEach(caption => {
+                        console.log(tempTranscript + "henlo")
+                        tempTranscript += " " + caption.text;
+                    })
+                    setTranscript(tempTranscript);
                     setCaptions(res.data);
                 })
                 .catch(err => console.error(err))
@@ -33,7 +41,6 @@ const Home = () => {
         }
     };
     const getKeyNotes = () => {
-        let matches = [];
         axios.post('https://hackathon.autokaas.com/tagExtractor', {"text": transcript}, {
             headers: {
                 "accept": "application/json",
@@ -47,6 +54,7 @@ const Home = () => {
             .catch(err => console.log(err));
     };
     const searchPhraseHandler = () => {
+        setMatchedCaptionFound(true);
         let matches = [];
         axios.post('https://hackathon.autokaas.com/get_similarWords', {"words": [phrase]}, {
             headers: {
@@ -56,21 +64,16 @@ const Home = () => {
             }
         }).then(res => {
             let arr = [...res.data.similar_words, phrase];
-            let tempTranscript = " ";
             captions.forEach(caption => {
-                tempTranscript += " " + caption.text;
                 for (let i = 0; i < arr.length; i++) {
-                    console.log("outside if");
                     if (_.includes(caption.text, arr[i].replace("_", " "))) {
-                        console.log("inside if");
                         matches.push({...caption, matchedPhrase: arr[i]});
                         break;
                     }
                 }
             });
-            setTranscript(tempTranscript);
             setMatchedCaptions(matches);
-            console.log(matches);
+            setMatchedCaptionFound(matches.length > 0);
         })
             .catch(err => console.log(err));
     };
@@ -129,6 +132,19 @@ const Home = () => {
 
     };
 
+    const getSummary = () => {
+        axios.post('https://hackathon.autokaas.com/summary', {payload: [{text: transcript}]}, {
+            headers: {
+                "accept": "application/json",
+                "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
+                "Content-Type": "application/json"
+            }
+        }).then(res => {
+            setSummary(res.data.response[0].summary_text);
+        })
+            .catch(err => console.log(err));
+    }
+
     return (<div>
         <div id="home">
             <div className="container fullheight home">
@@ -162,13 +178,27 @@ const Home = () => {
                         <header className="App-header">
                             {videoId.length === 11 ?
                                 <YoutubeIFrame videoId={videoId} startTimeInSeconds={Math.floor(startTime)}/> :
-                                <div className="dummy"></div>}
+                                <div className="dummy"/>}
                         </header>
                     </div>
                 </div>
             </div>
+            <div>
+                {transcript.length > 0 ?
+                    <button className="button button-v2" type="submit" onClick={getSummary}>Get
+                        Summary</button> : null}
+                <br/>
+                {summary}
+            </div>
             {videoId.length > 0 ?
                 <div>
+                    <div>
+                        {transcript.length > 0 ?
+                            <button className="button button-v2" type="submit" onClick={getKeyNotes}>Get
+                                Keypoints</button> : null}
+                        <br/>
+                        {keyNotes.map(keyNote => <span className="badge bg-warning text-dark">{keyNote}</span>)}
+                    </div>
                     <div>
                         <label itemID="phrase">Search Phrase *</label>
                         <input className="input" type="text" name="Pharse" id="phrase" value={phrase}
@@ -178,21 +208,15 @@ const Home = () => {
                         <button className="button button-v2" type="submit" onClick={searchPhraseHandler}>Search</button>
                         <br/>
                         {matchedCaptions.map(c => <button className="button button-v2"
-                                                          onClick={() => setStartTime(c.start)}
-                                                          type="submit">{c.matchedPhrase} - {c.start}</button>)}
-                    </div>
-                    <div>
-                        {transcript.length > 0 ?
-                            <button className="button button-v2" type="submit" onClick={getKeyNotes}>Get
-                                Keypoints</button> : null}
-                        <br/>
-                        {keyNotes.map(keyNote => <span className="badge bg-warning text-dark">{keyNote}</span>)}
+                            onClick={() => setStartTime(c.start)}
+                            type="submit">{c.matchedPhrase} - {c.start}</button>)}
+                        {!matchedCaptionFound ? "Try with a different phrase" : null}
                     </div>
                     <div>
                         <button className="button button-v2" type="submit" onClick={getSentimentAnalysis}>Analyse
                             Sentiment
                         </button>
-                        <canvas id="sa-chart"></canvas>
+                        <canvas id="sa-chart"/>
                     </div>
                 </div>
                 : ""}
