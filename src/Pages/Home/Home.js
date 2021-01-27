@@ -5,10 +5,13 @@ import YoutubeIFrame from "../../Components/YoutubeIFrame";
 import Loader from "../../Components/Loader";
 import Chart from "chart.js";
 import LanguageSelector from "../../Components/LanguageSelector";
+import {StartBanner} from "../../Components/StartBanner";
+import {RedOutlineButton} from "../../Components/RedOutlineButton";
 
 const _ = require('lodash');
 const punctuator = require('punctuator');
 const pos = require('pos');
+
 
 const Home = () => {
 
@@ -36,6 +39,7 @@ const Home = () => {
     const [knLoader, setKnLoader] = React.useState(false);
     const [saLoader, setSaLoader] = React.useState(false);
     const [quizLoader, setQuizLoader] = React.useState(false);
+    const [phraseAutoArray, setPhraseAutoArray] = React.useState([]);
 
     const getTranscriptHandler = () => {
         const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -60,7 +64,7 @@ const Home = () => {
         }
     };
     const getKeyNotes = () => {
-        if(keyNotes.length > 0)
+        if (keyNotes.length > 0)
             return null;
         setKnLoader(true);
         axios.post('https://hackathon.autokaas.com/tagExtractor', {"text": transcript}, {
@@ -285,20 +289,7 @@ const Home = () => {
     };
 
     return (<div>
-        <div id="home">
-            <div className="container fullheight home">
-                <div className="row">
-                    <div className="col-md-5 col-xs-12">
-                        <h1 className="color-white">Elysium</h1>
-                        <p className="color-white fontsize-lg">
-                            A NLP tool for remove those hassles of finding that “the” moment in the video to give user
-                            quick and most relevant content.
-                        </p>
-                        <a href="#getstarted" className="button">Get Started</a>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <StartBanner/>
         <div className="container transcript" id="getstarted">
             <div className="text-centre"><h1 className="color-dark">Get Started</h1></div>
             <div className="row">
@@ -330,43 +321,42 @@ const Home = () => {
                         <div className="col-md-8">
                             <div className="inline">
                                 {transcript.length > 0 ?
-                                    <button className="button button-v3" type="submit" onClick={() => {
+                                    <RedOutlineButton onClick={() => {
                                         getSummary();
                                         update(1);
-                                    }}>Get
-                                        Summary</button> : null}
+                                    }}>Get Summary</RedOutlineButton> : null}
                             </div>
                             <div className="inline">
                                 {transcript.length > 0 ?
-                                    <button className="button button-v3" type="submit" onClick={() => {
+                                    <RedOutlineButton onClick={() => {
                                         getKeyNotes();
                                         update(2)
                                     }}>
-                                        Key Notes</button> : null}
+                                        Key Notes</RedOutlineButton> : null}
 
                             </div>
                             <div className="inline">
-                                <button className="button button-v3" onClick={() => {
+                                <RedOutlineButton onClick={() => {
                                     update(3)
                                 }}> Search Phrase
-                                </button>
+                                </RedOutlineButton>
                             </div>
                             <div className="inline">
-                                <button className="button button-v3" type="submit"
-                                        onClick={() => {
-                                            getSentimentAnalysis();
-                                            update(4)
-                                        }}>Analyse
+                                <RedOutlineButton
+                                    onClick={() => {
+                                        getSentimentAnalysis();
+                                        update(4)
+                                    }}>Analyse
                                     Sentiment
-                                </button>
+                                </RedOutlineButton>
                             </div>
                             <div className="inline">
-                                <button className="button button-v3" type="submit"
-                                        onClick={() => {
-                                            getQuiz();
-                                            update(5)
-                                        }}>Generate Quiz
-                                </button>
+                                <RedOutlineButton
+                                    onClick={() => {
+                                        getQuiz();
+                                        update(5)
+                                    }}>Generate Quiz
+                                </RedOutlineButton>
                             </div>
                         </div>
                     </div>
@@ -393,13 +383,36 @@ const Home = () => {
                                     <div className="row">
                                         <div className="col-md-6">
                                             <label itemID="phrase">Phrase *</label>
-                                            <input className="input" type="text" name="Phrase" id="phrase"
-                                                   value={phrase}
-                                                   placeholder="Enter Phrase"
-                                                   onChange={(e) => setPhrase(e.target.value)}/>
+                                            {langValue === -1 ?
+                                                <>
+                                                    {langValue}
+                                                    <input className="input" list="datalistOptions" onChange={(e) => {
+                                                        setPhrase(e.target.value);
+                                                        axios.post("https://hackathon.autokaas.com/autocomplete", {text: e.target.value}, {
+                                                            headers: {
+                                                                "accept": "application/json",
+                                                                "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
+                                                                "Content-Type": "application/json"
+                                                            }
+                                                        }).then(res => {
+                                                            setPhraseAutoArray(res.data.suggested_phrases)
+                                                        }).catch(err => console.log(err));
+                                                    }}
+                                                           type="text" name="Phrase" id="exampleDataList"
+                                                           placeholder="Type to search..."/>
+                                                    <datalist id="datalistOptions">
+                                                        {phraseAutoArray.map(p => <option value={p}/>)}
+                                                    </datalist>
+                                                </> :
+                                                <input className="input" type="text" name="Phrase" id="phrase"
+                                                       value={phrase}
+                                                       placeholder="Enter Phrase"
+                                                       onChange={(e) => setPhrase(e.target.value)}/>}
                                         </div>
                                         <div className="col-md-6">
-                                            <LanguageSelector langValue={langValue} setLangValue={setLangValue}/>
+                                            <LanguageSelector langValue={langValue} setLangValue={(v) => {
+                                                setLangValue(parseInt(v));
+                                            }}/>
                                         </div>
                                         <div className="col-md-12">
                                             <button className="button button-v2" type="submit"
@@ -433,14 +446,13 @@ const Home = () => {
                                         <h4 className="color-primary fontsize-sm">{q?.sentence}</h4>
                                         <ol>
                                             {q?.options.map(o => <li onClick={(o) => {
-                                                if(o.target.outerText===q.answer){
+                                                if (o.target.outerText === q.answer) {
                                                     document.getElementById(q.answer).innerHTML = 'Your Answer is Correct'
-                                                }
-                                                else document.getElementById(q.answer).innerHTML = 'Incorrect Answer'
+                                                } else document.getElementById(q.answer).innerHTML = 'Incorrect Answer'
                                             }
                                             } className="color-dark fontsize-sm option">{o}</li>)}
                                         </ol>
-                                        <p id={q.answer} className="color-primary"></p>
+                                        <p id={q.answer} className="color-primary"/>
                                     </li>)) : "No quiz"}
                                 </ol>
                             </div> : ""
