@@ -8,7 +8,7 @@ import LanguageSelector from "../../Components/LanguageSelector";
 
 const _ = require('lodash');
 const punctuator = require('punctuator');
-var pos = require('pos');
+const pos = require('pos');
 
 const Home = () => {
 
@@ -60,6 +60,8 @@ const Home = () => {
         }
     };
     const getKeyNotes = () => {
+        if(keyNotes.length > 0)
+            return null;
         setKnLoader(true);
         axios.post('https://hackathon.autokaas.com/tagExtractor', {"text": transcript}, {
             headers: {
