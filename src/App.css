@@ -171,3 +171,4 @@ label{
 .inline{
 	display: inline-table;
 }
+button:focus {outline:0;}

@@ -7,6 +7,8 @@ import Chart from "chart.js";
 import LanguageSelector from "../../Components/LanguageSelector";
 
 const _ = require('lodash');
+const punctuator = require('punctuator');
+var pos = require('pos');
 
 const Home = () => {
 
@@ -19,6 +21,7 @@ const Home = () => {
     const [startTime, setStartTime] = React.useState(0);
     const [keyNotes, setKeyNotes] = React.useState([]);
     const [summary, setSummary] = React.useState("");
+    const [quiz, setQuiz] = React.useState([]);
     const [matchedCaptionFound, setMatchedCaptionFound] = React.useState(true);
     const [langValue, setLangValue] = React.useState(-1);
 
@@ -26,11 +29,13 @@ const Home = () => {
     const [vis2, setVis2] = React.useState(false);
     const [vis3, setVis3] = React.useState(false);
     const [vis4, setVis4] = React.useState(false);
+    const [vis5, setVis5] = React.useState(false);
     const [loader, setLoader] = React.useState(false);
     const [summaryLoader, setSummaryLoader] = React.useState(false);
     const [spLoader, setSpLoader] = React.useState(false);
     const [knLoader, setKnLoader] = React.useState(false);
     const [saLoader, setSaLoader] = React.useState(false);
+    const [quizLoader, setQuizLoader] = React.useState(false);
 
     const getTranscriptHandler = () => {
         const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -45,7 +50,7 @@ const Home = () => {
                     res.data.forEach(caption => {
                         tempTranscript += " " + caption.text;
                     });
-                    setTranscript(tempTranscript);
+                    setTranscript(punctuator.punctuate(tempTranscript));
                     setCaptions(res.data);
                 })
                 .catch(err => console.error(err))
@@ -88,27 +93,31 @@ const Home = () => {
         }
 
         let matches = [];
-        axios.post('https://hackathon.autokaas.com/get_similarWords', {"words": [englishLangPhrase]}, {
+        const similar_words = await getSimilarWords([englishLangPhrase]);
+        setSpLoader(false);
+        let arr = [...similar_words, phrase];
+        captions.forEach(caption => {
+            for (let i = 0; i < arr.length; i++) {
+                if (_.includes(caption.text, arr[i].replace("_", " "))) {
+                    matches.push({...caption, matchedPhrase: arr[i]});
+                    break;
+                }
+            }
+        });
+        setMatchedCaptions(matches);
+        setMatchedCaptionFound(matches.length > 0);
+    };
+
+    const getSimilarWords = async (word) => {
+        return axios.post('https://hackathon.autokaas.com/get_similarWords', {"words": word}, {
             headers: {
                 "accept": "application/json",
                 "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
                 "Content-Type": "application/json"
             }
         }).then(res => {
-            setSpLoader(false);
-            let arr = [...res.data.similar_words, phrase];
-            captions.forEach(caption => {
-                for (let i = 0; i < arr.length; i++) {
-                    if (_.includes(caption.text, arr[i].replace("_", " "))) {
-                        matches.push({...caption, matchedPhrase: arr[i]});
-                        break;
-                    }
-                }
-            });
-            setMatchedCaptions(matches);
-            setMatchedCaptionFound(matches.length > 0);
-        })
-            .catch(err => console.log(err));
+            return res.data.similar_words;
+        }).catch(err => console.log(err));
     };
 
     const getSentimentAnalysis = () => {
@@ -165,19 +174,87 @@ const Home = () => {
 
     };
 
-    const getSummary = () => {
-        setSummaryLoader(true);
-        axios.post('https://hackathon.autokaas.com/summary', {payload: [{text: transcript}]}, {
+    const getSummaryPromise = () => {
+        return axios.post('https://hackathon.autokaas.com/summary', {payload: [{text: transcript}]}, {
             headers: {
                 "accept": "application/json",
                 "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
                 "Content-Type": "application/json"
             }
-        }).then(res => {
-            setSummaryLoader(false);
-            setSummary(res.data.response[0].summary_text);
-        })
-            .catch(err => console.log(err));
+        });
+    };
+    const getSummary = () => {
+        if (summary === "") {
+            setSummaryLoader(true);
+            return getSummaryPromise().then(res => {
+                setSummaryLoader(false);
+                setSummary(res.data.response[0].summary_text);
+                return res.data.response[0].summary_text;
+            })
+                .catch(err => console.log(err));
+        }
+        return summary;
+    };
+
+    const getQuiz = async () => {
+
+        setQuizLoader(true);
+        const sum = await getSummary();
+        let questions = [];
+        const sentences = sum.split(".");
+        for (let s in sentences) {
+            let sentence = sentences[s].trim();
+            sentence = sentence.replace(/ *\([^)]*\) */g, "");
+            const q = await evaluateSentence(sentence);
+            if (q !== null) {
+                questions.push(q);
+            }
+        }
+        console.log(questions);
+        // let oldarr = quiz.slice();
+        await setQuiz(questions);
+        console.log(quiz);
+        setQuizLoader(false);
+    };
+
+    const evaluateSentence = async (sentence) => {
+        setQuizLoader(true);
+        const words = new pos.Lexer().lex(sentence);
+        const tagger = new pos.Tagger();
+        const taggedWords = tagger.tag(words);
+        for (var i in taggedWords) {
+            const taggedWord = taggedWords[i];
+            const word = taggedWord[0].trim();
+            const tag = taggedWord[1];
+            if (tag === 'NN' && word.length > 3) {
+                let options = await getSimilarWords([word]);
+                if (options === null || options.length < 2) return null;
+                options = options.filter(function (item, pos) {
+                    return options.indexOf(item) === pos;
+                });
+                options = options.slice(0, 3);
+                options.push(word);
+                shuffleArray(options);
+                if (options.length === 3) options.push("None of these");
+                setQuizLoader(false);
+                sentence = sentence.replace(word, "_________").trim();
+                return {
+                    sentence: sentence,
+                    answer: word,
+                    options: options
+                };
+            }
+        }
+        return null;
+    };
+
+    const shuffleArray = (array) => {
+        for (var i = array.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var temp = array[i];
+            array[i] = array[j];
+            array[j] = temp;
+        }
     };
 
     const update = (vis) => {
@@ -185,6 +262,7 @@ const Home = () => {
         setVis2(false);
         setVis3(false);
         setVis4(false);
+        setVis5(false);
         switch (vis) {
             case 1:
                 setVis1(true);
@@ -197,6 +275,9 @@ const Home = () => {
                 break;
             case 4:
                 setVis4(true);
+                break;
+            case 5:
+                setVis5(true);
                 break;
         }
     };
@@ -260,7 +341,6 @@ const Home = () => {
                                         update(2)
                                     }}>
                                         Key Notes</button> : null}
-                                <br/>
 
                             </div>
                             <div className="inline">
@@ -276,6 +356,14 @@ const Home = () => {
                                             update(4)
                                         }}>Analyse
                                     Sentiment
+                                </button>
+                            </div>
+                            <div className="inline">
+                                <button className="button button-v3" type="submit"
+                                        onClick={() => {
+                                            getQuiz();
+                                            update(5)
+                                        }}>Generate Quiz
                                 </button>
                             </div>
                         </div>
@@ -332,6 +420,27 @@ const Home = () => {
                                 <h2>Sentimental Analysis</h2>
                                 {saLoader ? <Loader/> : ""}
                                 <canvas id="sa-chart"/>
+                            </div> : ""
+                        }
+                        {vis5 ?
+                            <div className="col-md-12">
+                                <h2>Quiz</h2>
+                                {quizLoader ? <Loader/> : ""}
+                                <ol>
+                                    {quiz.length > 0 ? quiz.map(q => (<li>
+                                        <h4 className="color-primary fontsize-sm">{q?.sentence}</h4>
+                                        <ol>
+                                            {q?.options.map(o => <li onClick={(o) => {
+                                                if(o.target.outerText===q.answer){
+                                                    document.getElementById(q.answer).innerHTML = 'Your Answer is Correct'
+                                                }
+                                                else document.getElementById(q.answer).innerHTML = 'Incorrect Answer'
+                                            }
+                                            } className="color-dark fontsize-sm option">{o}</li>)}
+                                        </ol>
+                                        <p id={q.answer} className="color-primary"></p>
+                                    </li>)) : "No quiz"}
+                                </ol>
                             </div> : ""
                         }
 

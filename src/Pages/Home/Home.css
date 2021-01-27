@@ -49,3 +49,8 @@
 .transcript .inner{
 	margin-top: 10%;
 }
+.option:hover{
+	cursor: pointer;
+	color: #ff0056;
+	font-weight: bold;
+}
