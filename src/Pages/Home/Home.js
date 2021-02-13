@@ -385,7 +385,6 @@ const Home = () => {
                                             <label itemID="phrase">Phrase *</label>
                                             {langValue === -1 ?
                                                 <>
-                                                    {langValue}
                                                     <input className="input" list="datalistOptions" onChange={(e) => {
                                                         setPhrase(e.target.value);
                                                         axios.post("https://hackathon.autokaas.com/autocomplete", {text: e.target.value}, {
@@ -453,7 +452,7 @@ const Home = () => {
                                             } className="color-dark fontsize-sm option">{o}</li>)}
                                         </ol>
                                         <p id={q.answer} className="color-primary"/>
-                                    </li>)) : "No quiz"}
+                                    </li>)) : "Generating Quiz..."}
                                 </ol>
                             </div> : ""
                         }
