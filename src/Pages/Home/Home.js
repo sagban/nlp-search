@@ -15,17 +15,21 @@ const pos = require('pos');
 
 const Home = () => {
 
+    const [token, setToken] = React.useState("");
     const [matchedCaptions, setMatchedCaptions] = React.useState([]);
+    const [keyMatchedCaptions, setKeyMatchedCaptions] = React.useState([]);
     const [captions, setCaptions] = React.useState([]);
     const [url, setUrl] = React.useState("");
     const [videoId, setVideoId] = React.useState("");
     const [phrase, setPhrase] = React.useState("");
+    const [topics, setTopics] = React.useState([]);
     const [transcript, setTranscript] = React.useState("");
     const [startTime, setStartTime] = React.useState(0);
     const [keyNotes, setKeyNotes] = React.useState([]);
-    const [summary, setSummary] = React.useState("");
+    const [summary, setSummary] = React.useState([]);
     const [quiz, setQuiz] = React.useState([]);
     const [matchedCaptionFound, setMatchedCaptionFound] = React.useState(true);
+    const [keyMatchedCaptionFound, setKeyMatchedCaptionFound] = React.useState(true);
     const [langValue, setLangValue] = React.useState(-1);
 
     const [vis1, setVis1] = React.useState(false);
@@ -41,21 +45,50 @@ const Home = () => {
     const [quizLoader, setQuizLoader] = React.useState(false);
     const [phraseAutoArray, setPhraseAutoArray] = React.useState([]);
 
-    const getTranscriptHandler = () => {
+    const baseURL = "https://nlapi.expert.ai";
+    const language = "en";
+
+    const getToken = async () => {
+        if (token.length === 0) {
+            return axios.post(`https://developer.expert.ai/oauth2/token/`, {
+                "username": "sagarbansal099@gmail.com",
+                "password": "h2kvK9hNHJVj!E2"
+            }, {
+                headers: {
+                    "Content-Type": "application/json"
+                }
+            }).then(async res => {
+                if (res.status === 200) {
+                    const t = "Bearer " + res.data
+                    await setToken(t);
+                    return t;
+                }
+            });
+        } else return token;
+    }
+
+    const getTranscriptHandler = async () => {
         const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
         const match = url.match(regExp);
         if (match && match[2].length === 11) {
             setVideoId(match[2]);
             setLoader(true);
-            axios.get(`https://get-transcripts.azurewebsites.net/api/hack?code=Bz7Fagkn0m3k7br2RRIeg7kDda3UVRzWnJJixs13sXYzuoZTjrd2Uw==&videoId=${match[2]}`)
-                .then(res => {
-                    setLoader(false);
-                    let tempTranscript = " ";
-                    res.data.forEach(caption => {
-                        tempTranscript += " " + caption.text;
+            axios.get(`http://ytb-api.azurewebsites.net/api/ytb-t01?video_id=${match[2]}`)
+                .then(async res => {
+                    setLoader(false)
+                    const tempTranscript = punctuator.punctuate(res.data.summary);
+                    await setTranscript(tempTranscript);
+                    setCaptions(res.data.transcripts);
+                    getKeyElements(tempTranscript).then(data => {
+                        console.log(data);
+                        let topics = [];
+                        data['topics'].forEach(topic => {
+                            topics.push(topic.label);
+                        });
+                        setTopics(topics.slice(0, 4));
+                        setSummary(data['mainSentences']);
+                        setKeyNotes(data['mainPhrases']);
                     });
-                    setTranscript(punctuator.punctuate(tempTranscript));
-                    setCaptions(res.data);
                 })
                 .catch(err => console.error(err))
         } else {
@@ -63,23 +96,64 @@ const Home = () => {
             setVideoId("");
         }
     };
-    const getKeyNotes = () => {
-        if (keyNotes.length > 0)
-            return null;
-        setKnLoader(true);
-        axios.post('https://hackathon.autokaas.com/tagExtractor', {"text": transcript}, {
-            headers: {
-                "accept": "application/json",
-                "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
-                "Content-Type": "application/json"
+
+    const getKeyElements = async (transcript) => {
+        return getToken().then(t => {
+            const payload = {
+                document: {
+                    text: transcript
+                }
             }
-        }).then(res => {
-            setKnLoader(false);
-            let tagArray = res.data.response[0].tags;
-            setKeyNotes(tagArray);
-            console.log(tagArray)
-        })
-            .catch(err => console.log(err));
+            const headers = {
+                "accept": "application/json",
+                "Authorization": t,
+                "Content-Type": "application/json; charset=utf-8"
+            }
+            return axios.post(`${baseURL}/v2/analyze/standard/${language}/relevants`, payload, {headers: headers})
+                .then(res => {
+                    return res.data['data'];
+                }).catch(err => console.log(err));
+        });
+
+
+    }
+
+    const getKeyNotes = () => {
+        // if (keyNotes.length > 0)
+        //     return null;
+        setKnLoader(true);
+        // let arr = keyNotes;
+
+
+        getToken().then(t => {
+            const payload = {
+                document: {
+                    text: transcript
+                }
+            }
+            const headers = {
+                "accept": "application/json",
+                "Authorization": t,
+                "Content-Type": "application/json; charset=utf-8"
+            }
+            axios.post(`${baseURL}/v2/analyze/standard/${language}/entities`, payload, {headers: headers})
+                .then(res => {
+                    setKnLoader(false);
+                    let arr = res.data['data']['entities'];
+                    const matches = []
+                    captions.forEach(caption => {
+                        for (let i = 0; i < arr.length; i++) {
+                            if (_.includes(caption.text, arr[i].lemma.replace("_", " "))) {
+                                matches.push({...caption, matchedPhrase: arr[i].lemma});
+                                break;
+                            }
+                        }
+                    });
+                    console.log(matches);
+                    setKeyMatchedCaptions(matches);
+                    setKeyMatchedCaptionFound(matches.length > 0);
+                }).catch(err => console.log(err));
+        });
     };
     const searchPhraseHandler = async () => {
         let englishLangPhrase = phrase;
@@ -115,10 +189,10 @@ const Home = () => {
     };
 
     const getSimilarWords = async (word) => {
-        return axios.post('https://hackathon.autokaas.com/get_similarWords', {"words": word}, {
+        return axios.post('https://hackathon.autokaas.com/get_similarWords', {"word": word}, {
             headers: {
                 "accept": "application/json",
-                "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
+                "token": token,
                 "Content-Type": "application/json"
             }
         }).then(res => {
@@ -190,16 +264,35 @@ const Home = () => {
         });
     };
     const getSummary = () => {
-        if (summary === "") {
-            setSummaryLoader(true);
-            return getSummaryPromise().then(res => {
-                setSummaryLoader(false);
-                setSummary(res.data.response[0].summary_text);
-                return res.data.response[0].summary_text;
-            })
-                .catch(err => console.log(err));
+        // if (summary === "") {
+        //     setSummaryLoader(true);
+        //     return getSummaryPromise().then(res => {
+        //         setSummaryLoader(false);
+        //         setSummary(res.data.response[0].summary_text);
+        //         return res.data.response[0].summary_text;
+        //     })
+        //         .catch(err => console.log(err));
+        // }
+        // return summary;
+        summary.sort((a, b) => {
+            if (a.start >= b.start) return 1;
+            else return -1;
+        });
+        let prev = 0;
+        let html = [];
+        for (let s in summary) {
+            const start = summary[s]['start'];
+            const end = summary[s]['end'];
+            html.push(<span>
+                <span>{transcript.substring(prev, start)}</span>
+                <br/>
+                <span className={'highlight'}>{transcript.substring(start, end)}</span>
+            </span>);
+            prev = end;
         }
-        return summary;
+        html.push(<span>{transcript.substring(prev)}</span>);
+        console.log(html)
+        return <div>{html}</div>;
     };
 
     const getQuiz = async () => {
@@ -312,6 +405,8 @@ const Home = () => {
                                 <div className="dummy"/>}
                         </header>
                     </div>
+                    {topics.length > 0 ? topics.map(topic => <div style={{"display": "inline-table"}}><span
+                        className="button button-v4 button-sm">#{topic}</span></div>) : ""}
                 </div>
             </div>
             {videoId.length > 0 && transcript.length > 0 ?
@@ -322,7 +417,6 @@ const Home = () => {
                             <div className="inline">
                                 {transcript.length > 0 ?
                                     <RedOutlineButton onClick={() => {
-                                        getSummary();
                                         update(1);
                                     }}>Get Summary</RedOutlineButton> : null}
                             </div>
@@ -365,15 +459,19 @@ const Home = () => {
                             <div className="col-md-12">
                                 <h2>Summary</h2>
                                 {summaryLoader ? <Loader/> : ""}
-                                {summary.length > 0 ? summary : ""}
+                                {transcript.length > 0 ? <span>{getSummary()}</span> : ""}
                             </div>
                             : ""}
                         {vis2 ?
                             <div className="col-md-12">
                                 <h2>Key Notes</h2>
                                 {knLoader ? <Loader/> : ""}
-                                {keyNotes.map(keyNote => <div style={{"display": "inline-table"}}><span
-                                    className="button button-v3 button-sm">{keyNote}</span></div>)}
+                                {keyMatchedCaptions.map(c => <div style={{"display": "inline-table"}}>
+                                    <button className="button button-v3 button-sm"
+                                            onClick={() => setStartTime(c.start)}
+                                            type="submit">{c.matchedPhrase} - {c.start}</button>
+                                </div>)}
+                                {!keyMatchedCaptionFound ? "Try with a different phrase" : null}
                             </div> : ""
                         }
                         {vis3 ?
