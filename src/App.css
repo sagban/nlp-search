@@ -101,6 +101,19 @@ label{
 	color: white !important;
 	border: #ff0056 1px solid !important;
 }
+.button-v4 {
+	background: #ff0056 !important;
+	color: white !important;
+	border: #ff0056 1px solid !important;
+	width: auto;
+	font-size: 10px;
+	border-radius: 2px !important;
+	margin-top: 10px !important;
+}
+.button-v4:hover{
+	color: white !important;
+	font-weight: bold;
+}
 
 .button-sm{
 	padding: 5px 10px!important;
@@ -172,3 +185,6 @@ label{
 	display: inline-table;
 }
 button:focus {outline:0;}
+.highlight{
+	background: #fdecf2;
+}
