@@ -7,6 +7,8 @@ import Chart from "chart.js";
 import LanguageSelector from "../../Components/LanguageSelector";
 import {StartBanner} from "../../Components/StartBanner";
 import {RedOutlineButton} from "../../Components/RedOutlineButton";
+import Dictaphone from "../../Components/Dictaphone";
+import SpeechRecognition, {useSpeechRecognition} from 'react-speech-recognition'
 
 const _ = require('lodash');
 const punctuator = require('punctuator');
@@ -45,6 +47,7 @@ const Home = () => {
     const [quizLoader, setQuizLoader] = React.useState(false);
     const [phraseAutoArray, setPhraseAutoArray] = React.useState([]);
     const [overallSentiment, setOverallSentiment] = React.useState(0);
+    const [speech, setSpeech] = React.useState("");
 
 
     const baseURL = "https://nlapi.expert.ai";
@@ -125,12 +128,7 @@ const Home = () => {
     }
 
     const getKeyNotes = () => {
-        // if (keyNotes.length > 0)
-        //     return null;
         setKnLoader(true);
-        // let arr = keyNotes;
-
-
         getToken().then(t => {
             const payload = {
                 document: {
@@ -155,33 +153,29 @@ const Home = () => {
                             }
                         }
                     });
-                    console.log(matches);
                     setKeyMatchedCaptions(matches);
                     setKeyMatchedCaptionFound(matches.length > 0);
                 }).catch(err => console.log(err));
         });
     };
     const searchPhraseHandler = async () => {
-        let englishLangPhrase = phrase;
-        setSpLoader(true);
-        if (langValue !== -1) {
-            englishLangPhrase = await axios.post('https://hackathon.autokaas.com/translate_to_en', {texts: [phrase]}, {
-                headers: {
-                    "accept": "application/json",
-                    "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
-                    "Content-Type": "application/json"
-                }
-            }).then(res => {
-                setMatchedCaptionFound(true);
-                console.log(res);
-                return res.data.results[0];
-            }).catch(err => console.error(err));
+        let englishLangPhrase = phrase.trim() || speech.trim();
+        if(englishLangPhrase.length ===0){
+            setMatchedCaptionFound(englishLangPhrase.length > 0);
+            return;
         }
-
+        setSpeech("");
+        setPhrase("");
+        setSpLoader(true);
+        const lemmas = [englishLangPhrase];
+        const data = await getKeyElements(englishLangPhrase);
+        data['mainLemmas'].forEach(lemma => {
+            if(lemma.value !== englishLangPhrase) lemmas.push(lemma.value);
+        });
         let matches = [];
-        const similar_words = await getSimilarWords([englishLangPhrase]);
+        const similar_words = await getSimilarWords(lemmas[0]) || [];
         setSpLoader(false);
-        let arr = [...similar_words, phrase];
+        let arr = [...similar_words, ...lemmas];
         captions.forEach(caption => {
             for (let i = 0; i < arr.length; i++) {
                 if (_.includes(caption.text, arr[i].replace("_", " "))) {
@@ -207,7 +201,9 @@ const Home = () => {
             return axios.post(`https://ytb-api.azurewebsites.net/api/ytb-similarwords-01`, payload, {headers: headers})
                 .then(res => {
                     console.log(res);
-                    return res.data.synms;
+                    if (res.data.synms !== null)
+                        return res.data.synms;
+                    else return [];
                 }).catch(err => console.log(err));
         });
     };
@@ -241,11 +237,11 @@ const Home = () => {
                             setOverallSentiment(sentiment.overall);
                             console.log(sentimentsArray)
                             let chartData = [
-                                _.sumBy(_.filter(sentimentsArray, o => o.sentiment < -20), o => o.sentiment),
-                                _.sumBy(_.filter(sentimentsArray, o => o.sentiment < -10 && o.sentiment >= -20), o => o.sentiment),
-                                _.sumBy(_.filter(sentimentsArray, o => o.sentiment < 10 && o.sentiment >= -10), o => o.sentiment),
-                                _.sumBy(_.filter(sentimentsArray, o => o.sentiment <= 10 && o.sentiment > 30), o => o.sentiment),
-                                _.sumBy(_.filter(sentimentsArray, o => o.sentiment >= 30), o => o.sentiment)
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < -8), o => o.sentiment),
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 0 && o.sentiment >= -8), o => o.sentiment),
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 3 && o.sentiment >= 0), o => o.sentiment),
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 8 && o.sentiment >= 3), o => o.sentiment),
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment >= 8), o => o.sentiment)
                             ]
                             const ctx = document.getElementById("sa-chart");
                             new Chart(ctx, {
@@ -257,9 +253,9 @@ const Home = () => {
                                             label: "# of Votes",
                                             data: chartData,
                                             backgroundColor: [
-                                                "#FCEEF3",
-                                                "#F9D9E5",
-                                                "#FA9CBE",
+                                                "#cfcece",
+                                                "#f3e5ea",
+                                                "#fdaac8",
                                                 "#F9679C",
                                                 "#ff0560"
                                             ],
@@ -292,13 +288,12 @@ const Home = () => {
             prev = end;
         }
         html.push(<span>{transcript.substring(prev)}</span>);
-        console.log(html)
         return <div>{html}</div>;
     };
 
     const getQuiz = async () => {
 
-        if(quiz.length>0)return;
+        if (quiz.length > 0) return;
         setQuizLoader(true);
         const sum = transcript;
         let questions = [];
@@ -311,10 +306,7 @@ const Home = () => {
                 questions.push(q);
             }
         }
-        console.log(questions);
-        // let oldarr = quiz.slice();
         await setQuiz(questions);
-        console.log(quiz);
         setQuizLoader(false);
     };
 
@@ -328,7 +320,7 @@ const Home = () => {
             const taggedWord = taggedWords[i];
             const word = taggedWord[0].trim();
             const tag = taggedWord[1];
-            if (tag === 'NN' && word.length > 4 && taggedWords.length > 8) {
+            if (tag === 'NN' && word.length > 4 && taggedWords.length > 10) {
                 let options = await getSimilarWords(word);
                 if (options === null || options.length < 2) return null;
                 options = options.filter(function (item, pos) {
@@ -382,7 +374,11 @@ const Home = () => {
                 setVis5(true);
                 break;
         }
+
     };
+    const handleSpeech = (res) => {
+        setSpeech(res);
+    }
 
     return (<div>
         <StartBanner/>
@@ -485,36 +481,20 @@ const Home = () => {
                                     <div className="row">
                                         <div className="col-md-6">
                                             <label itemID="phrase">Phrase *</label>
-                                            {langValue === -1 ?
-                                                <>
-                                                    <input className="input" list="datalistOptions"
-                                                           onChange={(e) => {
-                                                               setPhrase(e.target.value);
-                                                               axios.post("https://hackathon.autokaas.com/autocomplete", {text: e.target.value}, {
-                                                                   headers: {
-                                                                       "accept": "application/json",
-                                                                       "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
-                                                                       "Content-Type": "application/json"
-                                                                   }
-                                                               }).then(res => {
-                                                                   setPhraseAutoArray(res.data.suggested_phrases)
-                                                               }).catch(err => console.log(err));
-                                                           }}
-                                                           type="text" name="Phrase" id="exampleDataList"
-                                                           placeholder="Type to search..."/>
-                                                    <datalist id="datalistOptions">
-                                                        {phraseAutoArray.map(p => <option value={p}/>)}
-                                                    </datalist>
-                                                </> :
-                                                <input className="input" type="text" name="Phrase" id="phrase"
-                                                       value={phrase}
-                                                       placeholder="Enter Phrase"
-                                                       onChange={(e) => setPhrase(e.target.value)}/>}
+                                            <input className="input" type="text" name="Phrase"
+                                                   id="phrase"
+                                                   value={phrase}
+                                                   placeholder="Enter Phrase"
+                                                   onChange={(e) => setPhrase(e.target.value)}/>
                                         </div>
+                                        {/*<div className="col-md-6">*/}
+                                        {/*    <LanguageSelector langValue={langValue} setLangValue={(v) => {*/}
+                                        {/*        setLangValue(parseInt(v));*/}
+                                        {/*    }}/>*/}
+                                        {/*</div>*/}
                                         <div className="col-md-6">
-                                            <LanguageSelector langValue={langValue} setLangValue={(v) => {
-                                                setLangValue(parseInt(v));
-                                            }}/>
+                                            <label itemID="phrase">Try Speaking Instead</label>
+                                            <Dictaphone handleSpeech={handleSpeech}></Dictaphone>
                                         </div>
                                         <div className="col-md-12">
                                             <button className="button button-v2" type="submit"
@@ -562,7 +542,7 @@ const Home = () => {
                                                     document.getElementById(q.answer).innerHTML = 'Your Answer is Correct'
                                                 } else document.getElementById(q.answer).innerHTML = 'Incorrect Answer'
                                             }
-                                            } className="color-dark fontsize-sm option">{o}</li>)}
+                                            } className="color-dark fontsize-sm option" style={{"text-transform":"capitalize"}}>{o}</li>)}
                                         </ol>
                                         <p id={q.answer} className="color-primary"/>
                                     </li>)) : "Generating Quiz..."}
