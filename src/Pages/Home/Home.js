@@ -7,6 +7,8 @@ import Chart from "chart.js";
 import LanguageSelector from "../../Components/LanguageSelector";
 import {StartBanner} from "../../Components/StartBanner";
 import {RedOutlineButton} from "../../Components/RedOutlineButton";
+import Dictaphone from "../../Components/Dictaphone";
+import SpeechRecognition, {useSpeechRecognition} from 'react-speech-recognition'
 
 const _ = require('lodash');
 const punctuator = require('punctuator');
@@ -44,6 +46,9 @@ const Home = () => {
     const [saLoader, setSaLoader] = React.useState(false);
     const [quizLoader, setQuizLoader] = React.useState(false);
     const [phraseAutoArray, setPhraseAutoArray] = React.useState([]);
+    const [overallSentiment, setOverallSentiment] = React.useState(0);
+    const [speech, setSpeech] = React.useState("");
+
 
     const baseURL = "https://nlapi.expert.ai";
     const language = "en";
@@ -88,9 +93,13 @@ const Home = () => {
                         setTopics(topics.slice(0, 4));
                         setSummary(data['mainSentences']);
                         setKeyNotes(data['mainPhrases']);
+                        setQuiz([]);
                     });
                 })
-                .catch(err => console.error(err))
+                .catch(err => {
+                    console.error(err);
+                    setLoader(false);
+                });
         } else {
             alert("Invalid URL");
             setVideoId("");
@@ -119,12 +128,7 @@ const Home = () => {
     }
 
     const getKeyNotes = () => {
-        // if (keyNotes.length > 0)
-        //     return null;
         setKnLoader(true);
-        // let arr = keyNotes;
-
-
         getToken().then(t => {
             const payload = {
                 document: {
@@ -149,33 +153,29 @@ const Home = () => {
                             }
                         }
                     });
-                    console.log(matches);
                     setKeyMatchedCaptions(matches);
                     setKeyMatchedCaptionFound(matches.length > 0);
                 }).catch(err => console.log(err));
         });
     };
     const searchPhraseHandler = async () => {
-        let englishLangPhrase = phrase;
-        setSpLoader(true);
-        if (langValue !== -1) {
-            englishLangPhrase = await axios.post('https://hackathon.autokaas.com/translate_to_en', {texts: [phrase]}, {
-                headers: {
-                    "accept": "application/json",
-                    "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
-                    "Content-Type": "application/json"
-                }
-            }).then(res => {
-                setMatchedCaptionFound(true);
-                console.log(res);
-                return res.data.results[0];
-            }).catch(err => console.error(err));
+        let englishLangPhrase = phrase.trim() || speech.trim();
+        if(englishLangPhrase.length ===0){
+            setMatchedCaptionFound(englishLangPhrase.length > 0);
+            return;
         }
-
+        setSpeech("");
+        setPhrase("");
+        setSpLoader(true);
+        const lemmas = [englishLangPhrase];
+        const data = await getKeyElements(englishLangPhrase);
+        data['mainLemmas'].forEach(lemma => {
+            if(lemma.value !== englishLangPhrase) lemmas.push(lemma.value);
+        });
         let matches = [];
-        const similar_words = await getSimilarWords([englishLangPhrase]);
+        const similar_words = await getSimilarWords(lemmas[0]) || [];
         setSpLoader(false);
-        let arr = [...similar_words, phrase];
+        let arr = [...similar_words, ...lemmas];
         captions.forEach(caption => {
             for (let i = 0; i < arr.length; i++) {
                 if (_.includes(caption.text, arr[i].replace("_", " "))) {
@@ -189,91 +189,88 @@ const Home = () => {
     };
 
     const getSimilarWords = async (word) => {
-        return axios.post('https://hackathon.autokaas.com/get_similarWords', {"word": word}, {
-            headers: {
-                "accept": "application/json",
-                "token": token,
-                "Content-Type": "application/json"
+        return getToken().then(t => {
+            const payload = {
+                word: word
             }
-        }).then(res => {
-            return res.data.similar_words;
-        }).catch(err => console.log(err));
+            const headers = {
+                "accept": "application/json",
+                "Authorization": t,
+                "Content-Type": "application/json; charset=utf-8"
+            }
+            return axios.post(`https://ytb-api.azurewebsites.net/api/ytb-similarwords-01`, payload, {headers: headers})
+                .then(res => {
+                    console.log(res);
+                    if (res.data.synms !== null)
+                        return res.data.synms;
+                    else return [];
+                }).catch(err => console.log(err));
+        });
     };
 
     const getSentimentAnalysis = () => {
-        let sentimentsArray = [];
         setSaLoader(true);
-        axios.get(`https://youtube.googleapis.com/youtube/v3/commentThreads?part=snippet&maxResults=25&order=relevance&videoId=${videoId}&key=AIzaSyApX3bSpv8b3y1PEiA29VYI5jh1ZEyd7EQ`)
+        axios.get(`https://youtube.googleapis.com/youtube/v3/commentThreads?part=snippet&maxResults=100&order=relevance&videoId=${videoId}&key=AIzaSyApX3bSpv8b3y1PEiA29VYI5jh1ZEyd7EQ`)
             .then(res => {
-                let comments = [];
+                let comments = "";
                 let commentObjs = res.data.items;
+                console.log(commentObjs)
                 commentObjs.forEach(comObj => {
-                    comments.push(comObj.snippet.topLevelComment.snippet.textDisplay)
+                    comments += comObj.snippet.topLevelComment.snippet.textDisplay + " "
                 });
-                axios.post("https://hackathon.autokaas.com/get_sentiment", {"texts": comments}, {
-                    headers: {
-                        "accept": "application/json",
-                        "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
-                        "Content-Type": "application/json",
-                    }
-                }).then(r => {
-                    setSaLoader(false);
-                    sentimentsArray = r.data.results;
-                    let chartData = [_.sumBy(sentimentsArray, (o) => o.scores['1 star']),
-                        _.sumBy(sentimentsArray, (o) => o.scores['2 star']),
-                        _.sumBy(sentimentsArray, (o) => o.scores['3 star']),
-                        _.sumBy(sentimentsArray, (o) => o.scores['4 star']),
-                        _.sumBy(sentimentsArray, (o) => o.scores['5 star'])]
-                    const ctx = document.getElementById("sa-chart");
-                    new Chart(ctx, {
-                        type: "pie",
-                        data: {
-                            labels: ["Don't even think about it", "Not Good", "Okaish", "Good", "Awesome"],
-                            datasets: [
-                                {
-                                    label: "# of Votes",
-                                    data: chartData,
-                                    backgroundColor: [
-                                        "#FCEEF3",
-                                        "#F9D9E5",
-                                        "#FA9CBE",
-                                        "#F9679C",
-                                        "#ff0560"
-                                    ],
-                                    borderColor: ["Dont even think about it", "Not Good", "Okaish", "Good", "Awesome"],
-                                    borderWidth: 1
-                                }
-                            ]
+                getToken().then(t => {
+                    const payload = {
+                        document: {
+                            text: comments
                         }
-                    });
-                })
-                    .catch(er => console.error(er));
-            })
-            .catch(err => console.error(err));
-        console.log(sentimentsArray);
-
-    };
-
-    const getSummaryPromise = () => {
-        return axios.post('https://hackathon.autokaas.com/summary', {payload: [{text: transcript}]}, {
-            headers: {
-                "accept": "application/json",
-                "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
-                "Content-Type": "application/json"
-            }
-        });
+                    }
+                    const headers = {
+                        "accept": "application/json",
+                        "Authorization": t,
+                        "Content-Type": "application/json; charset=utf-8"
+                    }
+                    axios.post(`${baseURL}/v2/analyze/standard/${language}/sentiment`, payload, {headers: headers})
+                        .then(r => {
+                            setSaLoader(false);
+                            let sentiment = r.data.data.sentiment;
+                            let sentimentsArray = sentiment.items;
+                            setOverallSentiment(sentiment.overall);
+                            console.log(sentimentsArray)
+                            let chartData = [
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < -8), o => o.sentiment),
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 0 && o.sentiment >= -8), o => o.sentiment),
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 3 && o.sentiment >= 0), o => o.sentiment),
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 8 && o.sentiment >= 3), o => o.sentiment),
+                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment >= 8), o => o.sentiment)
+                            ]
+                            const ctx = document.getElementById("sa-chart");
+                            new Chart(ctx, {
+                                type: "pie",
+                                data: {
+                                    labels: ["Don't even think about it", "Not Good", "Okaish", "Good", "Awesome"],
+                                    datasets: [
+                                        {
+                                            label: "# of Votes",
+                                            data: chartData,
+                                            backgroundColor: [
+                                                "#cfcece",
+                                                "#f3e5ea",
+                                                "#fdaac8",
+                                                "#F9679C",
+                                                "#ff0560"
+                                            ],
+                                            borderColor: ["Dont even think about it", "Not Good", "Okaish", "Good", "Awesome"],
+                                            borderWidth: 1
+                                        }
+                                    ]
+                                }
+                            });
+                        })
+                        .catch(er => console.error(er));
+                }).catch(err => console.error(err));
+            }).catch(err => console.error(err));
     };
     const getSummary = () => {
-        // if (summary === "") {
-        //     setSummaryLoader(true);
-        //     return getSummaryPromise().then(res => {
-        //         setSummaryLoader(false);
-        //         setSummary(res.data.response[0].summary_text);
-        //         return res.data.response[0].summary_text;
-        //     })
-        //         .catch(err => console.log(err));
-        // }
-        // return summary;
         summary.sort((a, b) => {
             if (a.start >= b.start) return 1;
             else return -1;
@@ -291,16 +288,16 @@ const Home = () => {
             prev = end;
         }
         html.push(<span>{transcript.substring(prev)}</span>);
-        console.log(html)
         return <div>{html}</div>;
     };
 
     const getQuiz = async () => {
 
+        if (quiz.length > 0) return;
         setQuizLoader(true);
-        const sum = await getSummary();
+        const sum = transcript;
         let questions = [];
-        const sentences = sum.split(".");
+        const sentences = sum.split(/[.?,]+/);
         for (let s in sentences) {
             let sentence = sentences[s].trim();
             sentence = sentence.replace(/ *\([^)]*\) */g, "");
@@ -309,10 +306,7 @@ const Home = () => {
                 questions.push(q);
             }
         }
-        console.log(questions);
-        // let oldarr = quiz.slice();
         await setQuiz(questions);
-        console.log(quiz);
         setQuizLoader(false);
     };
 
@@ -321,12 +315,13 @@ const Home = () => {
         const words = new pos.Lexer().lex(sentence);
         const tagger = new pos.Tagger();
         const taggedWords = tagger.tag(words);
-        for (var i in taggedWords) {
+        console.log(taggedWords)
+        for (let i in taggedWords) {
             const taggedWord = taggedWords[i];
             const word = taggedWord[0].trim();
             const tag = taggedWord[1];
-            if (tag === 'NN' && word.length > 3) {
-                let options = await getSimilarWords([word]);
+            if (tag === 'NN' && word.length > 4 && taggedWords.length > 10) {
+                let options = await getSimilarWords(word);
                 if (options === null || options.length < 2) return null;
                 options = options.filter(function (item, pos) {
                     return options.indexOf(item) === pos;
@@ -336,7 +331,7 @@ const Home = () => {
                 shuffleArray(options);
                 if (options.length === 3) options.push("None of these");
                 setQuizLoader(false);
-                sentence = sentence.replace(word, "_________").trim();
+                sentence = sentence.replace(word, "__________").trim();
                 return {
                     sentence: sentence,
                     answer: word,
@@ -379,7 +374,11 @@ const Home = () => {
                 setVis5(true);
                 break;
         }
+
     };
+    const handleSpeech = (res) => {
+        setSpeech(res);
+    }
 
     return (<div>
         <StartBanner/>
@@ -411,15 +410,10 @@ const Home = () => {
             </div>
             {videoId.length > 0 && transcript.length > 0 ?
                 <div>
-                    <div className="row">
+                    <div className="row" style={{"margin-bottom": "40px"}}>
                         <h3 className="fontsize-md color-dark">Select Any</h3>
                         <div className="col-md-8">
-                            <div className="inline">
-                                {transcript.length > 0 ?
-                                    <RedOutlineButton onClick={() => {
-                                        update(1);
-                                    }}>Get Summary</RedOutlineButton> : null}
-                            </div>
+
                             <div className="inline">
                                 {transcript.length > 0 ?
                                     <RedOutlineButton onClick={() => {
@@ -436,13 +430,10 @@ const Home = () => {
                                 </RedOutlineButton>
                             </div>
                             <div className="inline">
-                                <RedOutlineButton
-                                    onClick={() => {
-                                        getSentimentAnalysis();
-                                        update(4)
-                                    }}>Analyse
-                                    Sentiment
-                                </RedOutlineButton>
+                                {transcript.length > 0 ?
+                                    <RedOutlineButton onClick={() => {
+                                        update(1);
+                                    }}>Get Summary</RedOutlineButton> : null}
                             </div>
                             <div className="inline">
                                 <RedOutlineButton
@@ -450,6 +441,15 @@ const Home = () => {
                                         getQuiz();
                                         update(5)
                                     }}>Generate Quiz
+                                </RedOutlineButton>
+                            </div>
+                            <div className="inline">
+                                <RedOutlineButton
+                                    onClick={() => {
+                                        getSentimentAnalysis();
+                                        update(4)
+                                    }}>Analyse
+                                    Sentiment
                                 </RedOutlineButton>
                             </div>
                         </div>
@@ -481,35 +481,20 @@ const Home = () => {
                                     <div className="row">
                                         <div className="col-md-6">
                                             <label itemID="phrase">Phrase *</label>
-                                            {langValue === -1 ?
-                                                <>
-                                                    <input className="input" list="datalistOptions" onChange={(e) => {
-                                                        setPhrase(e.target.value);
-                                                        axios.post("https://hackathon.autokaas.com/autocomplete", {text: e.target.value}, {
-                                                            headers: {
-                                                                "accept": "application/json",
-                                                                "X-API-KEY": "oDtOHyuaEb2D0J6WGkAwv4rhn7hTIl8c4u3P5hic",
-                                                                "Content-Type": "application/json"
-                                                            }
-                                                        }).then(res => {
-                                                            setPhraseAutoArray(res.data.suggested_phrases)
-                                                        }).catch(err => console.log(err));
-                                                    }}
-                                                           type="text" name="Phrase" id="exampleDataList"
-                                                           placeholder="Type to search..."/>
-                                                    <datalist id="datalistOptions">
-                                                        {phraseAutoArray.map(p => <option value={p}/>)}
-                                                    </datalist>
-                                                </> :
-                                                <input className="input" type="text" name="Phrase" id="phrase"
-                                                       value={phrase}
-                                                       placeholder="Enter Phrase"
-                                                       onChange={(e) => setPhrase(e.target.value)}/>}
+                                            <input className="input" type="text" name="Phrase"
+                                                   id="phrase"
+                                                   value={phrase}
+                                                   placeholder="Enter Phrase"
+                                                   onChange={(e) => setPhrase(e.target.value)}/>
                                         </div>
+                                        {/*<div className="col-md-6">*/}
+                                        {/*    <LanguageSelector langValue={langValue} setLangValue={(v) => {*/}
+                                        {/*        setLangValue(parseInt(v));*/}
+                                        {/*    }}/>*/}
+                                        {/*</div>*/}
                                         <div className="col-md-6">
-                                            <LanguageSelector langValue={langValue} setLangValue={(v) => {
-                                                setLangValue(parseInt(v));
-                                            }}/>
+                                            <label itemID="phrase">Try Speaking Instead</label>
+                                            <Dictaphone handleSpeech={handleSpeech}></Dictaphone>
                                         </div>
                                         <div className="col-md-12">
                                             <button className="button button-v2" type="submit"
@@ -531,7 +516,17 @@ const Home = () => {
                             <div className="col-md-12">
                                 <h2>Sentimental Analysis</h2>
                                 {saLoader ? <Loader/> : ""}
-                                <canvas id="sa-chart"/>
+                                <div className={"row"}>
+                                    <div className={"col-md-7"}>
+                                        <canvas id="sa-chart"/>
+                                    </div>
+                                    <div className={"col-md-5"}>
+                                        <h4 className={"text-centre"}>Overall Sentiment</h4>
+                                        <p className={"fontsize-lg text-centre color-primary sentiment-score"}>{overallSentiment}</p>
+                                        <p className={"fontsize-xs text-right"}>-100 Most Negative <br/> 100 Most
+                                            Positive</p>
+                                    </div>
+                                </div>
                             </div> : ""
                         }
                         {vis5 ?
@@ -547,7 +542,7 @@ const Home = () => {
                                                     document.getElementById(q.answer).innerHTML = 'Your Answer is Correct'
                                                 } else document.getElementById(q.answer).innerHTML = 'Incorrect Answer'
                                             }
-                                            } className="color-dark fontsize-sm option">{o}</li>)}
+                                            } className="color-dark fontsize-sm option" style={{"text-transform":"capitalize"}}>{o}</li>)}
                                         </ol>
                                         <p id={q.answer} className="color-primary"/>
                                     </li>)) : "Generating Quiz..."}
