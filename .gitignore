@@ -135,3 +135,8 @@ node_modules
 .idea
 .idea/*/*
 .eslintcache
+
+azure_functions/.env
+azure_functions/.vscode
+azure_functions/.python_packages
+azure_functions/cred.json
