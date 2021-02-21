@@ -5,6 +5,9 @@ const App = () => {
     return (
         <div>
             <Home/>
+            <div className="footer">
+                <div className="container">Timeless AI</div>
+            </div>
         </div>
     );
 };

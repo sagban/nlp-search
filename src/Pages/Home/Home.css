@@ -1,28 +1,14 @@
 #home{
-	background: url("https://images.pexels.com/photos/5926397/pexels-photo-5926397.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1285&w=1920");
-	background-size: cover;
-	background-position: center;
+	background: url('../../images/background.jpg');
+	background-size: contain;
+	background-repeat: no-repeat;
+	background-position: right;
 	transition: all 7000ms ease-out;
 	animation: zoom;
 	animation-duration: 50000ms;
 	animation-iteration-count: infinite;
 }
-#home:hover {
-    background-size: 150%;
-}
-@keyframes zoom {
 
-	0%{
-		background-position: 0%;
-	}
-	50%{
-		background-position: 50%;
-	}
-	100%{
-		background-position: 0%;
-	}
-
-}
 .home{
 	padding: 120px 0;
 }
@@ -53,4 +39,8 @@
 	cursor: pointer;
 	color: #ff0056;
 	font-weight: bold;
+}
+.footer{
+	padding: 20px 0;
+	background: #eee;
 }
