@@ -78,7 +78,7 @@ const Home = () => {
         if (match && match[2].length === 11) {
             setVideoId(match[2]);
             setLoader(true);
-            axios.get(`http://ytb-api.azurewebsites.net/api/ytb-t01?video_id=${match[2]}`)
+            axios.get(`https://ytb-api.azurewebsites.net/api/ytb-t01?video_id=${match[2]}`)
                 .then(async res => {
                     setLoader(false)
                     const tempTranscript = punctuator.punctuate(res.data.summary);
