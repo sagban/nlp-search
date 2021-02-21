@@ -188,3 +188,8 @@ button:focus {outline:0;}
 .highlight{
 	background: #fdecf2;
 }
+.sentiment-score{
+	font-size: 55px;
+	font-weight: bold;
+	margin-top: 30px;
+}
