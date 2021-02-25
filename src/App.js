@@ -5,6 +5,7 @@ import Zoom from "./Pages/Zoom/Zoom";
 import {BrowserRouter as Router, Switch, Route, Link} from 'react-router-dom';
 import Team from "./Pages/Team/Team";
 import About from "./Pages/About/About";
+import Legal from "./Pages/Legal/legal";
 
 const App = () => {
     return (
@@ -35,7 +36,7 @@ const App = () => {
                                 <a className="nav-link" href="/Zoom">Zoom Transcript</a>
                             </li>
                             <li className="nav-item">
-                                <a className="nav-link" href="/Zoom">Legal Document</a>
+                                <a className="nav-link" href="/legal">Legal Document</a>
                             </li>
                             <li className="nav-item">
                                 <a className="nav-link" href="/team">Team</a>
@@ -51,6 +52,9 @@ const App = () => {
                     </Route>
                     <Route exact path='/zoom'>
                         <Zoom/>
+                    </Route>
+                    <Route exact path='/legal'>
+                        <Legal/>
                     </Route>
                     <Route exact path='/about'>
                         <About/>

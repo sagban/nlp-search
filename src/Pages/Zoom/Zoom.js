@@ -67,20 +67,39 @@ const Zoom = () => {
     }
 
     const zoomHandler = () => {
-        getKeyElements(transcript).then(data => {
-            console.log(data);
-            let topics = [];
-            data['topics'].forEach(topic => {
-                topics.push(topic.label);
+        setLoader(true);
+        const payload = {
+            text: transcript,
+            word_count: 500
+        }
+        const headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json; charset=utf-8"
+        }
+        axios.post(`https://ytb-api.azurewebsites.net/api/ytb-summary-01`, payload, {headers: headers})
+            .then(res => {
+                console.log(res);
+                if (res.data !== null) {
+                    setTranscript(res.data['summary']);
+                    getKeyElements(transcript).then(data => {
+                        setLoader(false);
+                        let topics = [];
+                        data['topics'].forEach(topic => {
+                            topics.push(topic.label);
+                        });
+                        setTopics(topics.slice(0, 4));
+                        setSummary(data['mainSentences']);
+                        setKeyNotes(data['mainLemmas']);
+                        setQuiz([]);
+                    });
+                }
             });
-            setTopics(topics.slice(0, 4));
-            setSummary(data['mainSentences']);
-            setKeyNotes(data['mainLemmas']);
-            setQuiz([]);
-        });
     }
     const getToken = async () => {
-        if (token.length === 0) {
+
+        let obj = JSON.parse(localStorage.getItem("key"));
+        const time_spend = (new Date().getTime() - obj?.timestamp) / 1000;
+        if (obj === null || time_spend > 3600) {
             return axios.post(`https://developer.expert.ai/oauth2/token/`, {
                 "username": "sagarbansal099@gmail.com",
                 "password": "h2kvK9hNHJVj!E2"
@@ -92,10 +111,15 @@ const Zoom = () => {
                 if (res.status === 200) {
                     const t = "Bearer " + res.data
                     await setToken(t);
+                    var object = {token: t, timestamp: new Date().getTime()}
+                    localStorage.setItem("key", JSON.stringify(object));
                     return t;
                 }
             });
-        } else return token;
+        } else {
+            setToken(obj.token);
+            return obj.token;
+        }
     }
     const getSentimentAnalysis = () => {
         setSaLoader(true);
@@ -271,7 +295,9 @@ const Zoom = () => {
                         <label itemID="youtubeUrl">Zoom Transcript *</label>
                         <input className="input" type="file" name="Zoom Transcript" id="youtubeUrl"
                                placeholder="Select Zoom Transcript"
-                               onChange={async (e) => {await showFile(e);}}/>
+                               onChange={async (e) => {
+                                   await showFile(e);
+                               }}/>
                         <button type="submit" className="button button-v2" onClick={zoomHandler}>Get Started</button>
                         {loader ? <Loader/> : ""}
                     </div>
@@ -295,7 +321,7 @@ const Zoom = () => {
                         className="button button-v4 button-sm">#{topic}</span></div>) : ""}
                 </div>
             </div>
-            {captions.length > 0 && transcript.length > 0 ?
+            {captions.length > 0 && transcript.length > 0 && topics.length > 0 ?
                 <div>
                     <div className="row" style={{"margin-bottom": "40px"}}>
                         <h3 className="fontsize-md color-dark">Select Any</h3>
