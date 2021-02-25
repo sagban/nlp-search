@@ -1,41 +1,30 @@
 import React from "react";
-import './Home.css'
 import axios from "axios/index";
-import YoutubeIFrame from "../../Components/YoutubeIFrame";
 import Loader from "../../Components/Loader";
-import Chart from "chart.js";
-import LanguageSelector from "../../Components/LanguageSelector";
-import {StartBanner} from "../../Components/StartBanner";
+import './Zoom.css'
 import {RedOutlineButton} from "../../Components/RedOutlineButton";
 import Dictaphone from "../../Components/Dictaphone";
 import {SimilarWords} from "../../Components/SimilarWords";
-import SpeechRecognition, {useSpeechRecognition} from 'react-speech-recognition'
 import {GenerateQuiz} from "../../Components/GenerateQuiz";
 
 const _ = require('lodash');
 const punctuator = require('punctuator');
 const pos = require('pos');
-
-
-const Home = () => {
-
+const baseURL = "https://nlapi.expert.ai";
+const language = "en";
+const Zoom = () => {
+    const [transcript, setTranscript] = React.useState("");
     const [token, setToken] = React.useState("");
     const [matchedCaptions, setMatchedCaptions] = React.useState([]);
     const [keyMatchedCaptions, setKeyMatchedCaptions] = React.useState([]);
     const [captions, setCaptions] = React.useState([]);
-    const [url, setUrl] = React.useState("");
-    const [videoId, setVideoId] = React.useState("");
     const [phrase, setPhrase] = React.useState("");
     const [topics, setTopics] = React.useState([]);
-    const [transcript, setTranscript] = React.useState("");
-    const [startTime, setStartTime] = React.useState(0);
     const [keyNotes, setKeyNotes] = React.useState([]);
     const [summary, setSummary] = React.useState([]);
     const [quiz, setQuiz] = React.useState([]);
     const [matchedCaptionFound, setMatchedCaptionFound] = React.useState(true);
     const [keyMatchedCaptionFound, setKeyMatchedCaptionFound] = React.useState(true);
-    const [langValue, setLangValue] = React.useState(-1);
-
     const [vis1, setVis1] = React.useState(false);
     const [vis2, setVis2] = React.useState(false);
     const [vis3, setVis3] = React.useState(false);
@@ -47,19 +36,70 @@ const Home = () => {
     const [knLoader, setKnLoader] = React.useState(false);
     const [saLoader, setSaLoader] = React.useState(false);
     const [quizLoader, setQuizLoader] = React.useState(false);
-    const [phraseAutoArray, setPhraseAutoArray] = React.useState([]);
     const [overallSentiment, setOverallSentiment] = React.useState(0);
     const [speech, setSpeech] = React.useState("");
 
+    const showFile = async (e) => {
+        e.preventDefault()
+        const reader = new FileReader()
+        reader.onload = async (e) => {
+            let text = (e.target.result)
+            const times = text.match(/[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/g)
+            text = text.split(/[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/g);
+            const len = Math.min(times.length, text.length);
+            let cap = [];
+            let t = "";
+            for (let i = 0; i < len; i++) {
+                const data = text[i].trim();
+                const start = times[i].trim();
+                if (data.length > 4 && start.length > 0) {
+                    cap.push({
+                        text: data,
+                        start: start
+                    });
+                    t += data + " "
+                }
+            }
+            setCaptions(cap);
+            setTranscript(t);
+        };
+        reader.readAsText(e.target.files[0]);
+    }
 
-    const baseURL = "https://nlapi.expert.ai";
-    const language = "en";
-
+    const zoomHandler = () => {
+        setLoader(true);
+        const payload = {
+            text: transcript,
+            word_count: 500
+        }
+        const headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json; charset=utf-8"
+        }
+        axios.post(`https://ytb-api.azurewebsites.net/api/ytb-summary-01`, payload, {headers: headers})
+            .then(res => {
+                console.log(res);
+                if (res.data !== null) {
+                    setTranscript(res.data['summary']);
+                    getKeyElements(transcript).then(data => {
+                        setLoader(false);
+                        let topics = [];
+                        data['topics'].forEach(topic => {
+                            topics.push(topic.label);
+                        });
+                        setTopics(topics.slice(0, 4));
+                        setSummary(data['mainSentences']);
+                        setKeyNotes(data['mainLemmas']);
+                        setQuiz([]);
+                    });
+                }
+            });
+    }
     const getToken = async () => {
 
         let obj = JSON.parse(localStorage.getItem("key"));
-        const time_spend = (new Date().getTime() - obj?.timestamp) /1000;
-        if (obj === null ||  time_spend > 3600) {
+        const time_spend = (new Date().getTime() - obj?.timestamp) / 1000;
+        if (obj === null || time_spend > 3600) {
             return axios.post(`https://developer.expert.ai/oauth2/token/`, {
                 "username": "sagarbansal099@gmail.com",
                 "password": "h2kvK9hNHJVj!E2"
@@ -76,48 +116,14 @@ const Home = () => {
                     return t;
                 }
             });
-        } else{
+        } else {
             setToken(obj.token);
             return obj.token;
         }
     }
-
-    const getTranscriptHandler = async () => {
-        const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-        const match = url.match(regExp);
-        if (match && match[2].length === 11) {
-            setVideoId(match[2]);
-            setLoader(true);
-            axios.get(`https://ytb-api.azurewebsites.net/api/ytb-t01?video_id=${match[2]}`)
-                .then(async res => {
-                    setLoader(false)
-                    const tempTranscript = punctuator.punctuate(res.data.summary);
-                    await setTranscript(tempTranscript);
-                    setCaptions(res.data.transcripts);
-                    getKeyElements(tempTranscript).then(data => {
-                        console.log(data);
-                        let topics = [];
-                        data['topics'].forEach(topic => {
-                            topics.push(topic.label);
-                        });
-                        setTopics(topics.slice(0, 4));
-                        setSummary(data['mainSentences']);
-                        setKeyNotes(data['mainLemmas']);
-                        setQuiz([]);
-                    });
-                })
-                .catch(err => {
-                    console.error(err);
-                    setLoader(false);
-                });
-        } else {
-            alert("Invalid URL");
-            setVideoId("");
-        }
-    };
-
-    const getKeyElements = async (transcript) => {
-        return getToken().then(t => {
+    const getSentimentAnalysis = () => {
+        setSaLoader(true);
+        getToken().then(t => {
             const payload = {
                 document: {
                     text: transcript
@@ -128,15 +134,17 @@ const Home = () => {
                 "Authorization": t,
                 "Content-Type": "application/json; charset=utf-8"
             }
-            return axios.post(`${baseURL}/v2/analyze/standard/${language}/relevants`, payload, {headers: headers})
-                .then(res => {
-                    return res.data['data'];
-                }).catch(err => console.log(err));
-        });
-
-
-    }
-
+            axios.post(`${baseURL}/v2/analyze/standard/${language}/sentiment`, payload, {headers: headers})
+                .then(r => {
+                    setSaLoader(false);
+                    let sentiment = r.data.data.sentiment;
+                    let sentimentsArray = sentiment.items;
+                    setOverallSentiment(sentiment.overall);
+                    console.log(sentimentsArray)
+                })
+                .catch(er => console.error(er));
+        }).catch(err => console.error(err));
+    };
     const getKeyNotes = () => {
         setKnLoader(true);
         getToken().then(t => {
@@ -168,6 +176,58 @@ const Home = () => {
                 }).catch(err => console.log(err));
         });
     };
+
+    const getSummary = () => {
+        summary.sort((a, b) => {
+            if (a.start >= b.start) return 1;
+            else return -1;
+        });
+        let prev = 0;
+        let html = [];
+        for (let s in summary) {
+            const start = summary[s]['start'];
+            const end = summary[s]['end'];
+            html.push(<span>
+                <span>{transcript.substring(prev, start)}</span>
+                <br/>
+                <span className={'highlight'}>{transcript.substring(start, end)}</span>
+            </span>);
+            prev = end;
+        }
+        html.push(<span>{transcript.substring(prev)}</span>);
+        return <div>{html}</div>;
+    };
+
+    const getQuiz = async () => {
+        if (quiz.length > 0) return;
+        setQuizLoader(true);
+
+        let questions = await getToken().then(async t => {
+            return await GenerateQuiz(transcript, keyNotes, t);
+        });
+        await setQuiz(questions);
+        setQuizLoader(false);
+    };
+
+    const getKeyElements = async (transcript) => {
+        return getToken().then(t => {
+            const payload = {
+                document: {
+                    text: transcript
+                }
+            }
+            const headers = {
+                "accept": "application/json",
+                "Authorization": t,
+                "Content-Type": "application/json; charset=utf-8"
+            }
+            return axios.post(`${baseURL}/v2/analyze/standard/${language}/relevants`, payload, {headers: headers})
+                .then(res => {
+                    return res.data['data'];
+                }).catch(err => console.log(err));
+        });
+    }
+
     const searchPhraseHandler = async () => {
         let englishLangPhrase = phrase.trim() || speech.trim();
         if (englishLangPhrase.length === 0) {
@@ -198,101 +258,6 @@ const Home = () => {
         setMatchedCaptionFound(matches.length > 0);
     };
 
-    const getSentimentAnalysis = () => {
-        setSaLoader(true);
-        axios.get(`https://youtube.googleapis.com/youtube/v3/commentThreads?part=snippet&maxResults=100&order=relevance&videoId=${videoId}&key=AIzaSyApX3bSpv8b3y1PEiA29VYI5jh1ZEyd7EQ`)
-            .then(res => {
-                let comments = "";
-                let commentObjs = res.data.items;
-                console.log(commentObjs)
-                commentObjs.forEach(comObj => {
-                    comments += comObj.snippet.topLevelComment.snippet.textDisplay + " "
-                });
-                getToken().then(t => {
-                    const payload = {
-                        document: {
-                            text: comments
-                        }
-                    }
-                    const headers = {
-                        "accept": "application/json",
-                        "Authorization": t,
-                        "Content-Type": "application/json; charset=utf-8"
-                    }
-                    axios.post(`${baseURL}/v2/analyze/standard/${language}/sentiment`, payload, {headers: headers})
-                        .then(r => {
-                            setSaLoader(false);
-                            let sentiment = r.data.data.sentiment;
-                            let sentimentsArray = sentiment.items;
-                            setOverallSentiment(sentiment.overall);
-                            console.log(sentimentsArray)
-                            let chartData = [
-                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < -8), o => o.sentiment),
-                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 0 && o.sentiment >= -8), o => o.sentiment),
-                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 3 && o.sentiment >= 0), o => o.sentiment),
-                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment < 8 && o.sentiment >= 3), o => o.sentiment),
-                                _.meanBy(_.filter(sentimentsArray, o => o.sentiment >= 8), o => o.sentiment)
-                            ]
-                            const ctx = document.getElementById("sa-chart");
-                            new Chart(ctx, {
-                                type: "pie",
-                                data: {
-                                    labels: ["Don't even think about it", "Not Good", "Okaish", "Good", "Awesome"],
-                                    datasets: [
-                                        {
-                                            label: "# of Votes",
-                                            data: chartData,
-                                            backgroundColor: [
-                                                "#cfcece",
-                                                "#f3e5ea",
-                                                "#fdaac8",
-                                                "#F9679C",
-                                                "#ff0560"
-                                            ],
-                                            borderColor: ["Dont even think about it", "Not Good", "Okaish", "Good", "Awesome"],
-                                            borderWidth: 1
-                                        }
-                                    ]
-                                }
-                            });
-                        })
-                        .catch(er => console.error(er));
-                }).catch(err => console.error(err));
-            }).catch(err => console.error(err));
-    };
-    const getSummary = () => {
-        summary.sort((a, b) => {
-            if (a.start >= b.start) return 1;
-            else return -1;
-        });
-        let prev = 0;
-        let html = [];
-        for (let s in summary) {
-            const start = summary[s]['start'];
-            const end = summary[s]['end'];
-            html.push(<span>
-                <span>{transcript.substring(prev, start)}</span>
-                <br/>
-                <span className={'highlight'}>{transcript.substring(start, end)}</span>
-            </span>);
-            prev = end;
-        }
-        html.push(<span>{transcript.substring(prev)}</span>);
-        return <div>{html}</div>;
-    };
-
-    const getQuiz = async () => {
-
-        if (quiz.length > 0) return;
-        setQuizLoader(true);
-
-        let questions = await getToken().then(async t => {
-            return await GenerateQuiz(transcript, keyNotes, t);
-        });
-        await setQuiz(questions);
-        setQuizLoader(false);
-    };
-
     const update = (vis) => {
         setVis1(false);
         setVis2(false);
@@ -321,41 +286,46 @@ const Home = () => {
     const handleSpeech = (res) => {
         setSpeech(res);
     }
-
     return (<div>
-        <StartBanner/>
-        <div className="container transcript" id="getstarted">
+        <div className="container transcript">
             <div className="text-centre"><h1 className="color-dark">Get Started</h1></div>
             <div className="row">
                 <div className="col-md-6">
                     <div className="inner">
-                        <label itemID="youtubeUrl">Youtube URL *</label>
-                        <input className="input" type="url" name="Youtube Url" id="youtubeUrl" value={url}
-                               placeholder="Enter Youtube URL"
-                               onChange={(e) => setUrl(e.target.value)}/>
-                        <button type="submit" className="button button-v2" onClick={getTranscriptHandler}>Get Video
-                        </button>
+                        <label itemID="youtubeUrl">Zoom Transcript *</label>
+                        <input className="input" type="file" name="Zoom Transcript" id="youtubeUrl"
+                               placeholder="Select Zoom Transcript"
+                               onChange={async (e) => {
+                                   await showFile(e);
+                               }}/>
+                        <button type="submit" className="button button-v2" onClick={zoomHandler}>Get Started</button>
                         {loader ? <Loader/> : ""}
                     </div>
                 </div>
                 <div className="col-md-6">
                     <div className="grid-item">
                         <header className="App-header">
-                            {videoId.length === 11 ?
-                                <YoutubeIFrame videoId={videoId} startTimeInSeconds={Math.floor(startTime)}/> :
-                                <div className="dummy"/>}
+                            {captions.length > 0 ?
+                                <div className="transcript-zoom">
+                                    {captions.map(cap => (
+                                        <div className="item">
+                                            <p className="fontsize-xs start">{cap.start}</p>
+                                            <p className='fontsize-sm text'>{cap.text}</p>
+                                        </div>
+                                    ))}
+                                </div> :
+                                <div className="dummy-zoom"/>}
                         </header>
                     </div>
                     {topics.length > 0 ? topics.map(topic => <div style={{"display": "inline-table"}}><span
                         className="button button-v4 button-sm">#{topic}</span></div>) : ""}
                 </div>
             </div>
-            {videoId.length > 0 && transcript.length > 0 ?
+            {captions.length > 0 && transcript.length > 0 && topics.length > 0 ?
                 <div>
                     <div className="row" style={{"margin-bottom": "40px"}}>
                         <h3 className="fontsize-md color-dark">Select Any</h3>
                         <div className="col-md-8">
-
                             <div className="inline">
                                 {transcript.length > 0 ?
                                     <RedOutlineButton onClick={() => {
@@ -410,7 +380,6 @@ const Home = () => {
                                 {knLoader ? <Loader/> : ""}
                                 {keyMatchedCaptions.map(c => <div style={{"display": "inline-table"}}>
                                     <button className="button button-v3 button-sm"
-                                            onClick={() => setStartTime(c.start)}
                                             type="submit">{c.matchedPhrase} - {c.start}</button>
                                 </div>)}
                                 {!keyMatchedCaptionFound ? "Try with a different phrase" : null}
@@ -429,11 +398,6 @@ const Home = () => {
                                                    placeholder="Enter Phrase"
                                                    onChange={(e) => setPhrase(e.target.value)}/>
                                         </div>
-                                        {/*<div className="col-md-6">*/}
-                                        {/*    <LanguageSelector langValue={langValue} setLangValue={(v) => {*/}
-                                        {/*        setLangValue(parseInt(v));*/}
-                                        {/*    }}/>*/}
-                                        {/*</div>*/}
                                         <div className="col-md-6">
                                             <label itemID="phrase">Try Speaking Instead</label>
                                             <Dictaphone handleSpeech={handleSpeech}></Dictaphone>
@@ -447,7 +411,6 @@ const Home = () => {
                                     {spLoader ? <Loader/> : ""}
                                     {matchedCaptions.map(c => <div style={{"display": "inline-table"}}>
                                         <button className="button button-v3 button-sm"
-                                                onClick={() => setStartTime(c.start)}
                                                 type="submit">{c.matchedPhrase} - {c.start}</button>
                                     </div>)}
                                     {!matchedCaptionFound ? "Try with a different phrase" : null}
@@ -459,9 +422,6 @@ const Home = () => {
                                 <h2>Sentimental Analysis</h2>
                                 {saLoader ? <Loader/> : ""}
                                 <div className={"row"}>
-                                    <div className={"col-md-7"}>
-                                        <canvas id="sa-chart"/>
-                                    </div>
                                     <div className={"col-md-5"}>
                                         <h4 className={"text-centre"}>Overall Sentiment</h4>
                                         <p className={"fontsize-lg text-centre color-primary sentiment-score"}>{overallSentiment}</p>
@@ -480,7 +440,7 @@ const Home = () => {
                                         <h4 className="color-primary fontsize-sm">{q?.sentence}</h4>
                                         <ol>
                                             {q?.options.map(o => <li onClick={(o) => {
-                                                if (o.target.outerText.toLowerCase() === q.answer.toLowerCase() ) {
+                                                if (o.target.outerText === q.answer) {
                                                     document.getElementById(q.answer).innerHTML = 'Your Answer is Correct'
                                                 } else document.getElementById(q.answer).innerHTML = 'Incorrect Answer'
                                             }
@@ -498,7 +458,5 @@ const Home = () => {
                 : ""}
         </div>
     </div>)
-
-};
-
-export default Home;
+}
+export default Zoom;
